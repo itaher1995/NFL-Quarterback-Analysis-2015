@@ -1,0 +1,181 @@
+---
+title: "NFL football play by play analysis of 2015"
+output: html_notebook
+---
+
+```{r}
+install.packages("dummies")
+install.packages("ggplot2")
+install.packages("dummies")
+install.packages("stringr")
+install.packages("plyr")
+```
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(dummies)
+library(stringr)
+library(plyr)
+```
+
+
+```{r}
+setwd("C:\\Users\\Owner\\Desktop\\gitstuff\\Projects\\nflPlayByPlay")
+df <- read.csv(file = "NFLPlaybyPlay2015.csv", header=TRUE, sep=",", stringsAsFactors = FALSE)
+df
+```
+
+Find the sum of all passing yards and rushing yards. What does this say about the league today?
+
+```{r}
+totalYds<-aggregate(df$ydsnet, by=list(PlayType=df$PlayType), FUN = sum)
+runPassTotalYds<-totalYds[totalYds$PlayType %in% c("Run","Pass"), ]
+ggplot(runPassTotalYds, aes(PlayType, x, fill=x)) + 
+       geom_bar(position="dodge", stat = "identity") + ggtitle("Total Yards by Play Type in 2015")
+```
+What we see is that the NFL is primarily a passing league. Let's look at quarterbacks.
+
+```{r}
+qbdf<-df[ which(!is.na(df$Passer)), ]
+qbdf<- dummy.data.frame(qbdf, names = c("PassOutcome","PassLength","PassLocation","TwoPointConv") , sep = ".")
+qbdf<- qbdf[, !(colnames(qbdf) %in% c("Rusher","RushAttempt","RunLocation","RunGap","FieldGoalResult","FieldGoalDistance","Challenge.Replay","ChalReplayResult","Accepted.Penalty","PenalizedTeam","PenaltyType","PenalizedPlayer","Penalty.Yards","Season","X","Date","time","desc","ExPointResult","PuntResult","Drive","GameID","qtr","TimeUnder","TimeSecs","PlayTimeDiff","SideofField","yrdln","yrdline100","ydstogo","GoalToGo","posteam","DefensiveTeam","PassLength.NA","PassLocation.NA","PosTeamScore","DefTeamScore","ScoreDiff","AbsScoreDiff","PlayType","Interceptor","TwoPointConv.NA","down.NA","sp","Receiver","ReturnResult","Returner","BlockingPlayer","Tackler1","Tackler2","RecFumbTeam","RecFumbPlayer","DefTwoPoint","Sack","down","ydsnet","Safety","PlayAttempted"))]
+qbdt<-setDT(qbdf)
+
+qbdt<-qbdt[, lapply(.SD, sum, na.rm=TRUE), by=Passer ]
+qbdf<-setDF(qbdt)
+qbdf1<-qbdf[qbdf$PassAttempt>=400, ]
+qbdf1<-qbdf1[order(-qbdf1$Yards.Gained), ]
+rownames(qbdf1) <- 1:nrow(qbdf1)
+qbdf1
+
+
+```
+
+From looking at this data we see that generally the yards gained is greater than the yards for each quarterback in the 2015 season. The only thing I can attribute this too is the fact that penalty yards aren't accounted for due to this. I think this is ok because we are trying to rate the passer himself and since the penalties of the team are rarely on the quarterback, penalty yards should not affect him.4
+
+```{r}
+passer<-qbdf$Passer
+qbRushDF<-df[which(df$Rusher %in% passer), ]
+qbRushDF<- dummy.data.frame(qbRushDF, names = c("RunLocation","RunGap") , sep = ".")
+qbRushDF<- qbRushDF[, !(colnames(qbRushDF) %in% c("FieldGoalResult","FieldGoalDistance","Challenge.Replay","ChalReplayResult","Accepted.Penalty","PenalizedTeam","PenaltyType","PenalizedPlayer","Penalty.Yards","Season","X","Date","time","desc","ExPointResult","PuntResult","Drive","GameID","qtr","TimeUnder","TimeSecs","PlayTimeDiff","SideofField","yrdln","yrdline100","ydstogo","GoalToGo","posteam","DefensiveTeam","PosTeamScore","DefTeamScore","ScoreDiff","AbsScoreDiff","PlayType","Interceptor","TwoPointConv.NA","down.NA","sp","Receiver","ReturnResult","Returner","BlockingPlayer","Tackler1","Tackler2","RecFumbTeam","RecFumbPlayer","DefTwoPoint","Sack","down","ydsnet","Safety","PlayAttempted","Passer","PassAttempt","PassOutcome","PassLength","PassLocation","TwoPointConv","InterceptionThrown","RunLocation.NA","RunGap.NA","Reception"))]
+qbRushDT<-setDT(qbRushDF)
+
+qbRushDT<-qbRushDF[, lapply(.SD, sum, na.rm=TRUE), by=Rusher ]
+qbRushDF<-setDF(qbRushDT)
+qbRushDF<-rename(qbRushDF,c("Rusher"="Passer","Yards.Gained"="Rushing.Yards","Touchdown"="Rushing.Touchdown","FirstDown"="Rushing.FirstDown"))
+qbRushDF
+```
+
+```{r}
+sackDF<-df[which(df$Sack==1), ]
+rownames(sackDF) <- 1:nrow(sackDF)
+for (i in 1:nrow(sackDF))
+{
+  if (length(passer[str_detect(sackDF[i, "desc"],passer)])!=0)
+  {
+   sackDF[i, "Passer"]<-passer[str_detect(sackDF[i, "desc"],passer)][1] 
+  }
+}
+sackDF<-sackDF[which(!is.na(sackDF$Passer)), ]
+sackDF<-sackDF[, !(colnames(sackDF) %in% c("FieldGoalResult","FieldGoalDistance","Challenge.Replay","ChalReplayResult","Accepted.Penalty","PenalizedTeam","PenaltyType","PenalizedPlayer","Penalty.Yards","Season","X","Date","time","desc","ExPointResult","PuntResult","Drive","GameID","qtr","TimeUnder","TimeSecs","PlayTimeDiff","SideofField","yrdln","yrdline100","ydstogo","GoalToGo","posteam","DefensiveTeam","PosTeamScore","DefTeamScore","ScoreDiff","AbsScoreDiff","PlayType","Interceptor","TwoPointConv.NA","down.NA","sp","Receiver","ReturnResult","Returner","BlockingPlayer","Tackler1","Tackler2","RecFumbTeam","RecFumbPlayer","DefTwoPoint","down","ydsnet","Safety","PlayAttempted","Rusher","PassAttempt","PassOutcome","PassLength","PassLocation","TwoPointConv","InterceptionThrown","RunLocation.NA","RunGap.NA","Reception","Rusher","RushAttempt","RunLocation","RunGap","FirstDown","Touchdown","Yards.Gained"))]
+sackdt<-setDT(sackDF)
+
+sackdt<-sackdt[, lapply(.SD, sum, na.rm=TRUE), by=Passer ]
+sackDF<-setDF(sackdt)
+sackDF
+```
+
+```{r}
+qbdf<-rename(qbdf,c("Yards.Gained"="Passing.Yards","Touchdown"="Passing.Touchdown","FirstDown"="Passing.FirstDown"))
+qbdf
+```
+
+```{r}
+newqbdf<-merge(x = qbdf, y = qbRushDF, by = "Passer", all.y = TRUE)
+newqbdf$Fumble<-newqbdf$Fumble.x+newqbdf$Fumble.y
+newqbdf<-newqbdf[, !(colnames(newqbdf) %in% c("Fumble.y","Fumble.x","Reception"))]
+newqbdf<-merge(x = newqbdf, y = sackDF, by = "Passer", all.x = TRUE)
+newqbdf$Fumble<-newqbdf$Fumble.x+newqbdf$Fumble.y
+newqbdf<-newqbdf[, !(colnames(newqbdf) %in% c("Fumble.y","Fumble.x"))]
+newqbdf<-newqbdf[newqbdf$PassAttempt>=300, ]
+newqbdf$Plays<-newqbdf$PassAttempt+newqbdf$RushAttempt+newqbdf$Sack
+newqbdf<-newqbdf[!is.na(newqbdf$Passer), ]
+newqbdf
+```
+
+```{r}
+anotherQBDF<-data.frame(row.names = newqbdf$Passer)
+anotherQBDF$completionRatio<-newqbdf$PassOutcome.Complete/newqbdf$PassAttempt
+anotherQBDF$passingYardsPerComp<-newqbdf$Passing.Yards/newqbdf$PassOutcome.Complete
+anotherQBDF$passingYardsPerAttempt<-newqbdf$Passing.Yards/newqbdf$PassAttempt
+anotherQBDF$rushingYardsPerAttempt<-newqbdf$Rushing.Yards/newqbdf$RushAttempt
+anotherQBDF$passFirstDownPerComp<-newqbdf$Passing.FirstDown/newqbdf$PassOutcome.Complete
+anotherQBDF$rushFirstDownPerAttempt<-newqbdf$Rushing.FirstDown/newqbdf$RushAttempt
+anotherQBDF$passingTouchdownPerComp<-newqbdf$Passing.Touchdown/newqbdf$PassOutcome.Complete
+anotherQBDF$rushingTouchdownPerAttempt<-newqbdf$Rushing.Touchdown/newqbdf$RushAttempt
+anotherQBDF$shortPassRatio<-newqbdf$PassLength.Short/newqbdf$PassAttempt
+anotherQBDF$deepPassRatio<-newqbdf$PassLength.Deep/newqbdf$PassAttempt
+anotherQBDF$fumblePerPlay<-newqbdf$Fumble/newqbdf$Plays
+anotherQBDF$sackPerPlay<-newqbdf$Sack/newqbdf$Plays
+anotherQBDF$interceptionPerAttempt<-newqbdf$InterceptionThrown/newqbdf$PassAttempt
+anotherQBDF
+
+```
+
+```{r}
+options(max.print = .Machine$integer.max)
+dM<-dist(anotherQBDF, method = "euclidean", diag = TRUE, upper = TRUE, p = 2)
+dM
+```
+
+```{r}
+capDF<-read.csv('qbcaps.csv')
+names(capDF)[names(capDF) == 'Name'] <- 'Passer'
+capDF
+
+```
+```{r}
+quarterbackPerformanceMetric<-function(comp, att, passtd, int, fum, sck, passyd, rushyd, rushatt,rushtd)
+{
+  performance <- (comp/att)*(passtd/(int+fum+(0.5*sck)))*(rushtd/(1.5*fum)+(.5*sck))*(0.5*passyd/comp)*(0.3*rushyd/rushatt)
+  return(performance)
+}
+```
+
+```{r}
+a<-0.50 #rushingyds multiplier
+b<-0.5 #rushingtd multiplier
+c<-1 #completion multiplier
+d<-2 #passingyds multiplier
+e<-4 #passingtd multiplier
+f<-3 #passing1d multiplier
+g<-2 #rushing1d multiplier
+h<-100 #playkill multiplier
+k<-0.025 #sack multiplier
+l<-0.5 #fumble multiplier
+newqbdf$QPM<-scale(((a*newqbdf$Rushing.Yards+b*newqbdf$Rushing.Touchdown)/newqbdf$RushAttempt)+((c*newqbdf$PassOutcome.Complete+d*newqbdf$Passing.Yards+e*newqbdf$Passing.Touchdown)/newqbdf$PassAttempt)+((f*newqbdf$Passing.FirstDown)/newqbdf$PassAttempt+(g*newqbdf$Rushing.FirstDown)/newqbdf$RushAttempt)-(h*(k*newqbdf$Sack+l*newqbdf$Fumble+newqbdf$InterceptionThrown)/(newqbdf$RushAttempt+newqbdf$PassAttempt)), scale = FALSE)
+
+newqbdf<-newqbdf[order(-newqbdf$QPM), ]
+rownames(newqbdf) <- 1:nrow(newqbdf)
+newqbdf
+```
+
+```{r}
+newqbdf<-merge(x=newqbdf, y=capDF, by="Passer", all.x = TRUE)
+
+```
+
+```{r}
+
+newqbdf<-newqbdf[order(-newqbdf$QPM), ]
+rownames(newqbdf) <- 1:nrow(newqbdf)
+newqbdf$sigmaQPM<-scale(newqbdf$QPM)
+newqbdf$sigmaCap<-scale(newqbdf$Cap)
+newqbdf$Value<-newqbdf$sigmaCap-newqbdf$sigmaQPM
+newqbdf<-newqbdf[order(newqbdf$Value), ]
+rownames(newqbdf) <- 1:nrow(newqbdf)
+newqbdf
+```
+
+Immediately when doing this we notice that players who came into the league within the last 3 years who were performing well (Tyrod Taylor, Russel Wilson, Derek Carr, etc.) are considered underpaid and older players may seem to be overpaid. However, for the most part, players who are overpaid are found at the top of the list (Phillip Rivers, Matt Stafford, etc.) for their performance. Now this does not effectively deem if a quarterback is good or not overall. For example, Aaron Rodgers and Matt Ryan both had statistically down seasons this year, with the Falcons going 4-12. This does not mean, by means neccessary that Matt Ryan is a bad quarterback. He just did not live up to his pay that season. Tom Brady was suspended for 4 games and he shows up pretty high on our list.
